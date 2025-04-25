@@ -39,13 +39,12 @@ dependencies:
   flutter_google_places_web: ^1.0.2
   google_maps_webservice: ^0.0.20-nullsafety.5
   flutter_typeahead: ^5.2.0
-  
+  intl: ^0.18.1
 
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
   # activated in the `analysis_options.yaml` file located at the root of your
@@ -65,6 +64,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/profile_placeholder.png
+    - assets/chico_wildcat_welcome.png
   
 
   # To add assets to your application, add an assets section, like this:
