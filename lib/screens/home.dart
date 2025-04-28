@@ -1,12 +1,8 @@
-// lib/screens/home.dart
-
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'dart:html' as html;
-import 'dart:typed_data';
 import 'package:firebase_auth/firebase_auth.dart';
-
+import 'package:google_fonts/google_fonts.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -15,57 +11,163 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
+  String rawSearchText = '';
   String searchQuery = '';
   String? selectedCategory;
   String sortOrder = 'Newest';
+  Timer? _debounce;
 
   final List<String> categories = ['All', 'Sports', 'Music', 'Tech', 'Art', 'Food', 'Meetup', 'Chico'];
+
+  final Map<String, IconData> categoryIcons = {
+    'All': Icons.grid_view,
+    'Sports': Icons.sports_soccer,
+    'Music': Icons.music_note,
+    'Tech': Icons.computer,
+    'Art': Icons.brush,
+    'Food': Icons.restaurant,
+    'Meetup': Icons.people,
+    'Chico': Icons.place,
+  };
+
+  final Map<String, IconData> sortIcons = {
+    'Newest': Icons.access_time,
+    'Oldest': Icons.history,
+    'A–Z': Icons.sort_by_alpha,
+  };
+
   final List<String> sortOptions = ['Newest', 'Oldest', 'A–Z'];
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('EventConnect')),
+      backgroundColor: const Color(0xFFF8F4FF),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(160),
+        child: AppBar(
+          automaticallyImplyLeading: false,
+          backgroundColor: const Color(0xFFF8F4FF),
+          elevation: 0,
+          flexibleSpace: Center(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 40),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Image.asset('assets/chico_wildcat_welcome.png', height: 40),
+                  const SizedBox(height: 8),
+                  Text("EventConnect", style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.bold)),
+                  Text("Discover events in Chico", style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey[700])),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              children: [
-                TextField(
-                  decoration: const InputDecoration(
-                    labelText: 'Search by title or location',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.search),
-                  ),
-                  onChanged: (value) => setState(() => searchQuery = value),
-                ),
-                const SizedBox(height: 12),
-                Row(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+            child: Material(
+              elevation: 5,
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: selectedCategory ?? 'All',
-                        items: categories.map((cat) => DropdownMenuItem(value: cat, child: Text(cat))).toList(),
-                        decoration: const InputDecoration(labelText: 'Category'),
-                        onChanged: (value) => setState(() => selectedCategory = value),
+                    Container(
+                      decoration: BoxDecoration(color: const Color(0xFFF2ECFF), borderRadius: BorderRadius.circular(12)),
+                      child: TextField(
+                        style: GoogleFonts.poppins(fontSize: 15),
+                        decoration: InputDecoration(
+                          hintText: 'Search by title or location',
+                          hintStyle: GoogleFonts.poppins(color: Colors.grey[700]),
+                          prefixIcon: const Icon(Icons.search, color: Color(0xFF6D28D9)),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                        ),
+                        onChanged: (value) {
+                          rawSearchText = value;
+                          if (_debounce?.isActive ?? false) _debounce!.cancel();
+                          _debounce = Timer(const Duration(milliseconds: 300), () {
+                            if (searchQuery != rawSearchText) {
+                              setState(() {
+                                searchQuery = rawSearchText;
+                              });
+                            }
+                          });
+                        },
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: sortOrder,
-                        items: sortOptions.map((opt) => DropdownMenuItem(value: opt, child: Text(opt))).toList(),
-                        decoration: const InputDecoration(labelText: 'Sort by'),
-                        onChanged: (value) => setState(() => sortOrder = value ?? 'Newest'),
-                      ),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: selectedCategory ?? 'All',
+                            items: categories.map((cat) {
+                              return DropdownMenuItem(
+                                value: cat,
+                                child: Row(
+                                  children: [
+                                    Icon(categoryIcons[cat], size: 20, color: Colors.deepPurple),
+                                    const SizedBox(width: 10),
+                                    Text(cat, style: GoogleFonts.poppins()),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                            decoration: InputDecoration(
+                              labelText: 'Category',
+                              labelStyle: GoogleFonts.poppins(),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            onChanged: (value) => setState(() => selectedCategory = value),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: sortOrder,
+                            items: sortOptions.map((opt) {
+                              return DropdownMenuItem(
+                                value: opt,
+                                child: Row(
+                                  children: [
+                                    Icon(sortIcons[opt], size: 20, color: Colors.deepPurple),
+                                    const SizedBox(width: 10),
+                                    Text(opt, style: GoogleFonts.poppins()),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                            decoration: InputDecoration(
+                              labelText: 'Sort by',
+                              labelStyle: GoogleFonts.poppins(),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            onChanged: (value) => setState(() => sortOrder = value ?? 'Newest'),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
-                )
-              ],
+                ),
+              ),
             ),
           ),
+          const SizedBox(height: 8),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance.collection('events').snapshots(),
@@ -74,7 +176,6 @@ class _HomePageState extends State<HomePage> {
 
                 List<QueryDocumentSnapshot> events = snapshot.data!.docs;
 
-                // Filter and sort
                 events = events.where((doc) {
                   final data = doc.data() as Map<String, dynamic>;
                   final title = (data['title'] ?? '').toString().toLowerCase();
@@ -93,53 +194,76 @@ class _HomePageState extends State<HomePage> {
                   events.sort((a, b) => (a['title'] ?? '').compareTo(b['title'] ?? ''));
                 }
 
-                return GridView.builder(
-                  padding: const EdgeInsets.all(12),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 3 / 4,
-                  ),
+                if (events.isEmpty) {
+                  return const Center(child: Text("No events found."));
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   itemCount: events.length,
                   itemBuilder: (context, index) {
                     final data = events[index].data() as Map<String, dynamic>;
                     final imageUrls = (data['imageUrls'] as List?)?.cast<String>() ?? [];
                     final firstImage = imageUrls.isNotEmpty ? imageUrls[0] : null;
+                    final title = data['title'] ?? '';
+                    final category = data['category'] ?? '';
 
-                    return GestureDetector(
-                      onTap: () => showDialog(
-                        context: context,
-                        builder: (_) => EventDetailsDialog(docId: events[index].id, data: data),
-                      ),
-                      child: Card(
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        elevation: 4,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            firstImage != null
-                                ? ClipRRect(
-                                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                                    child: Image.network(firstImage, height: 140, fit: BoxFit.cover),
-                                  )
-                                : Container(
-                                    height: 140,
-                                    decoration: const BoxDecoration(color: Colors.grey),
-                                    child: const Icon(Icons.image, size: 40),
+                    final AnimationController animController = AnimationController(
+                      vsync: this,
+                      duration: Duration(milliseconds: 300 + index * 50),
+                    );
+                    animController.forward();
+
+                    return FadeTransition(
+                      opacity: CurvedAnimation(parent: animController, curve: Curves.easeIn),
+                      child: SlideTransition(
+                        position: Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero).animate(animController),
+                        child: GestureDetector(
+                          onTap: () => showDialog(
+                            context: context,
+                            builder: (_) => EventDetailsDialog(docId: events[index].id, data: data),
+                          ),
+                          child: Card(
+                            elevation: 6,
+                            margin: const EdgeInsets.only(bottom: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                ClipRRect(
+                                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                                  child: SizedBox(
+                                    height: 180,
+                                    child: firstImage != null
+                                        ? Image.network(firstImage, fit: BoxFit.cover, width: double.infinity)
+                                        : Container(
+                                            color: Colors.grey[300],
+                                            child: const Center(child: Icon(Icons.image_not_supported, size: 40)),
+                                          ),
                                   ),
-                            Padding(
-                              padding: const EdgeInsets.all(8),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(data['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                  const SizedBox(height: 4),
-                                  Text(data['category'] ?? '', style: const TextStyle(color: Colors.grey)),
-                                ],
-                              ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        title,
+                                        style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Chip(
+                                        label: Text(category),
+                                        backgroundColor: Colors.deepPurple.shade50,
+                                        labelStyle: const TextStyle(color: Colors.deepPurple),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
+                          ),
                         ),
                       ),
                     );
@@ -158,140 +282,161 @@ class EventDetailsDialog extends StatefulWidget {
   final String docId;
   final Map<String, dynamic> data;
 
-  const EventDetailsDialog({super.key, required this.docId, required this.data});
+  const EventDetailsDialog({Key? key, required this.docId, required this.data}) : super(key: key);
 
   @override
-  State<EventDetailsDialog> createState() => _EventDetailsDialogState();
+  _EventDetailsDialogState createState() => _EventDetailsDialogState();
 }
 
-class _EventDetailsDialogState extends State<EventDetailsDialog> {
-  late List<String> imageUrls;
-  late String userId;
-  List<dynamic> interestedUserIds = [];
-  bool isInterested = false;
+class _EventDetailsDialogState extends State<EventDetailsDialog> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _animation;
+  PageController _pageController = PageController();
+  int _currentPage = 0;
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
-    imageUrls = (widget.data['imageUrls'] as List?)?.cast<String>() ?? [];
-    interestedUserIds = widget.data['interestedUserIds'] ?? [];
-  userId = FirebaseAuth.instance.currentUser?.uid ?? '';
-  isInterested = interestedUserIds.contains(userId);
-  
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
+    _animation = CurvedAnimation(parent: _controller, curve: Curves.easeIn);
+    _controller.forward();
+
+    if (widget.data['imageUrls'] != null && (widget.data['imageUrls'] as List).length > 1) {
+      _timer = Timer.periodic(const Duration(seconds: 3), (timer) {
+        if (_pageController.hasClients) {
+          int nextPage = (_currentPage + 1) % (widget.data['imageUrls'] as List).length;
+          _pageController.animateToPage(
+            nextPage,
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeInOut,
+          );
+        }
+      });
+    }
   }
 
-  Future<void> _markAsInterested() async {
-  if (userId.isEmpty || isInterested) return;
-
-  try {
-    final user = FirebaseAuth.instance.currentUser;
-
-    if (user != null) {
-  await FirebaseFirestore.instance.collection('events').doc(widget.docId).update({
-    'interestedUserIds': FieldValue.arrayUnion([user.uid]),
-    'interestedUserEmails': FieldValue.arrayUnion([user.email]),
-  });
-}
-
-    setState(() {
-      isInterested = true;
-      interestedUserIds.add(userId);
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('You marked this event as Interested!')),
-    );
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Failed to mark interest: $e')),
-    );
-  }
-}
-
-  Future<void> _addImages() async {
-    final uploadInput = html.FileUploadInputElement();
-    uploadInput.accept = 'image/*';
-    uploadInput.multiple = true;
-    uploadInput.click();
-
-    uploadInput.onChange.listen((event) async {
-      final files = uploadInput.files;
-      if (files == null || files.isEmpty) return;
-
-      List<String> newUrls = [];
-
-      for (final file in files) {
-        final reader = html.FileReader();
-        reader.readAsArrayBuffer(file);
-        await reader.onLoadEnd.first;
-
-        final data = reader.result as Uint8List;
-        final fileName = '${DateTime.now().millisecondsSinceEpoch}_${file.name}';
-        final ref = FirebaseStorage.instance.ref('event_images/$fileName');
-
-        try {
-          final uploadTask = await ref.putData(data);
-          final downloadUrl = await uploadTask.ref.getDownloadURL();
-          newUrls.add(downloadUrl);
-        } catch (_) {}
-      }
-
-      final updated = [...imageUrls, ...newUrls];
-      await FirebaseFirestore.instance.collection('events').doc(widget.docId).update({'imageUrls': updated});
-      setState(() => imageUrls = updated);
-    });
+  @override
+  void dispose() {
+    _controller.dispose();
+    _pageController.dispose();
+    _timer?.cancel();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(widget.data['title'] ?? '', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            Text("Category: ${widget.data['category'] ?? 'N/A'}"),
-            const SizedBox(height: 4),
-            Text("Date: ${widget.data['date'] ?? 'N/A'}"),
-            const SizedBox(height: 4),
-            Text("Location: ${widget.data['location'] ?? 'N/A'}"),
-            const SizedBox(height: 4),
-            Text("Description: ${widget.data['description'] ?? 'N/A'}"),
-            const SizedBox(height: 12),
-            if (imageUrls.isNotEmpty)
-              SizedBox(
-                height: 120,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: imageUrls.length,
-                  itemBuilder: (context, index) => Padding(
-                    padding: const EdgeInsets.only(right: 8.0),
-                    child: Image.network(imageUrls[index]),
+    final imageUrls = (widget.data['imageUrls'] as List?)?.cast<String>() ?? [];
+    final title = widget.data['title'] ?? 'Untitled';
+    final category = widget.data['category'] ?? 'N/A';
+    final dateRaw = widget.data['date']?.toString() ?? '';
+    final location = widget.data['location'] ?? 'N/A';
+    final description = widget.data['description'] ?? '';
+
+    String formattedDate = 'N/A';
+    try {
+      final parsed = DateTime.parse(dateRaw);
+      formattedDate = "${_monthName(parsed.month)} ${parsed.day}, ${parsed.year}";
+    } catch (_) {}
+
+    return FadeTransition(
+      opacity: _animation,
+      child: Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: const Color(0xFFF8F4FF),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (imageUrls.isNotEmpty)
+                  Column(
+                    children: [
+                      SizedBox(
+                        height: 200,
+                        child: PageView.builder(
+                          controller: _pageController,
+                          itemCount: imageUrls.length,
+                          onPageChanged: (index) => setState(() => _currentPage = index),
+                          itemBuilder: (context, index) => ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.network(imageUrls[index], fit: BoxFit.cover, width: double.infinity),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(imageUrls.length, (index) => Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          width: _currentPage == index ? 10 : 6,
+                          height: _currentPage == index ? 10 : 6,
+                          decoration: BoxDecoration(
+                            color: _currentPage == index ? Colors.deepPurple : Colors.grey,
+                            shape: BoxShape.circle,
+                          ),
+                        )),
+                      ),
+                    ],
                   ),
+                const SizedBox(height: 20),
+                Text(title,
+                    style: GoogleFonts.poppins(fontSize: 22, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center),
+                const SizedBox(height: 12),
+                _infoRow("Category", category),
+                _infoRow("Date", formattedDate),
+                _infoRow("Location", location),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text("Description:",
+                      style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15)),
                 ),
-              )
-            else
-              const Text("No images yet."),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: _addImages,
-              child: const Text("Add More Images"),
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(description.isNotEmpty ? description : "No description provided.",
+                      style: GoogleFonts.poppins(fontSize: 14)),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepPurple,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: Text("Close", style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
+                ),
+              ],
             ),
-            ElevatedButton.icon(
-  onPressed: isInterested ? null : _markAsInterested,
-  icon: const Icon(Icons.favorite_border),
-  label: Text(isInterested ? 'Interested ✔' : 'Mark as Interested'),
-),
-            const SizedBox(height: 8),
-            OutlinedButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text("Close"),
-            ),
-          ],
+          ),
         ),
       ),
     );
+  }
+
+  Widget _infoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          "$label: $value",
+          style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey[800]),
+        ),
+      ),
+    );
+  }
+
+  String _monthName(int month) {
+    const months = [
+      '', 'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return months[month];
   }
 }

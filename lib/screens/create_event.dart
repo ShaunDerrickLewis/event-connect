@@ -1,11 +1,14 @@
-import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'dart:typed_data';
+// CREATE_EVENT
+import 'dart:async';
 import 'dart:html' as html;
 import 'dart:js' as js;
-import 'dart:ui' as ui;
+import 'dart:typed_data';
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'main_nav.dart';
 
 class CreateEventPage extends StatefulWidget {
   const CreateEventPage({Key? key}) : super(key: key);
@@ -28,14 +31,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
   List<String> _uploadedImageUrls = [];
   String? _locationError;
   bool _isLoading = false;
-  String _placesElementId = 'google_places_container';
   bool _placesInitialized = false;
+  final List<String> _categories = ['Sports', 'Music', 'Tech', 'Art', 'Food', 'Meetup', 'Chico'];
 
-  final List<String> _categories = [
-  'Sports', 'Music', 'Tech', 'Art', 'Food', 'Meetup', 'Chico'
-];
-
-  // Google Places API Key
   static const String _googlePlacesApiKey = "AIzaSyCy9qUApiH7s6bUdShV4w6BiIs_N2Fb3u0";
 
   @override
@@ -46,46 +44,22 @@ class _CreateEventPageState extends State<CreateEventPage> {
       _userEmail = user.email;
       _emailController.text = _userEmail!;
     }
-
-    // Load Google Places API script
     _loadGooglePlacesScript();
   }
 
   void _loadGooglePlacesScript() {
     if (html.document.getElementById('google_places_api') != null) {
-      // Script already loaded
-      _initPlacesAutocomplete();
+      _placesInitialized = true;
       return;
     }
-
     final script = html.ScriptElement()
       ..id = 'google_places_api'
       ..type = 'text/javascript'
       ..src = 'https://maps.googleapis.com/maps/api/js?key=$_googlePlacesApiKey&libraries=places'
       ..onLoad.listen((event) {
-        _initPlacesAutocomplete();
+        _placesInitialized = true;
       });
-
     html.document.head!.append(script);
-  }
-
-  void _initPlacesAutocomplete() {
-    js.context['selectPlace'] = (place) {
-      if (mounted) {
-        setState(() {
-          _locationController.text = place;
-          if (_locationError != null) {
-            _locationError = null;
-          }
-        });
-      }
-    };
-
-    // This will be called when the places element is ready
-    _placesInitialized = true;
-    if (mounted) {
-      setState(() {});
-    }
   }
 
   @override
@@ -126,9 +100,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
           newImages.add(data);
         } catch (e) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Upload failed: ${file.name}')),
-            );
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Upload failed: ${file.name}')));
           }
         }
       }
@@ -139,13 +111,157 @@ class _CreateEventPageState extends State<CreateEventPage> {
           _imageBytesList = newImages;
         });
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✅ Images uploaded')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ Images uploaded')));
       }
     });
   }
 
+  ButtonStyle _buildButtonStyle() {
+    return ElevatedButton.styleFrom(
+      backgroundColor: Colors.deepPurple.shade50,
+      foregroundColor: Colors.deepPurple,
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 2,
+    );
+  }
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8F4FF),
+      appBar: AppBar(
+        title: Text('Create New Event', style: GoogleFonts.poppins()),
+        backgroundColor: const Color(0xFFF8F4FF),
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.black87),
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Center(
+                child: Card(
+                  elevation: 6,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildInputField(_titleController, 'Event Title'),
+                          const SizedBox(height: 16),
+                          _buildInputField(_descController, 'Description', maxLines: 3),
+                          const SizedBox(height: 16),
+                          DropdownButtonFormField<String>(
+                            value: _categories.contains(_selectedCategory) ? _selectedCategory : null,
+                            decoration: _buildInputDecoration('Category'),
+                            items: _categories.map((e) {
+                              return DropdownMenuItem(
+                                value: e,
+                                child: Text(e, style: GoogleFonts.poppins()),
+                              );
+                            }).toList(),
+                            onChanged: (val) => setState(() => _selectedCategory = val),
+                            validator: (value) => value == null ? 'Please select a category' : null,
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _locationController,
+                            decoration: _buildInputDecoration('Location').copyWith(
+                              suffixIcon: IconButton(
+                                icon: const Icon(Icons.search),
+                                onPressed: _showPlacesSearchDialog,
+                              ),
+                              errorText: _locationError,
+                            ),
+                            readOnly: true,
+                            onTap: _showPlacesSearchDialog,
+                            validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+                          ),
+                          const SizedBox(height: 16),
+                          _buildInputField(_emailController, 'Contact Email'),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: _pickDate,
+                            style: _buildButtonStyle(),
+                            icon: const Icon(Icons.calendar_today),
+                            label: Text(
+                              _selectedDate == null
+                                  ? 'Select Date'
+                                  : 'Date: ${_selectedDate!.toLocal().toString().split(' ')[0]}',
+                              style: GoogleFonts.poppins(),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: _pickAndUploadImages,
+                            icon: const Icon(Icons.upload),
+                            label: Text('Upload Images', style: GoogleFonts.poppins()),
+                            style: _buildButtonStyle(),
+                          ),
+                          if (_uploadedImageUrls.isNotEmpty) ...[
+                            const SizedBox(height: 24),
+                            Text(
+                              'Uploaded Images (${_uploadedImageUrls.length})',
+                              style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              height: 100,
+                              child: ListView.builder(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: _uploadedImageUrls.length,
+                                itemBuilder: (context, index) {
+                                  return Container(
+                                    margin: const EdgeInsets.only(right: 12),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(12),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black12,
+                                          blurRadius: 6,
+                                          offset: const Offset(0, 2),
+                                        )
+                                      ],
+                                    ),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Image.network(
+                                        _uploadedImageUrls[index],
+                                        width: 100,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 30),
+                          ElevatedButton(
+                            onPressed: _isLoading ? null : _saveEvent,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              child: Text('Create Event', style: GoogleFonts.poppins(fontSize: 16)),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.deepPurple,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              elevation: 4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+    );
+  }
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -158,108 +274,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
     }
   }
 
-  void _showPlacesSearchDialog() {
-    // Create unique ID for this search instance
-    final searchId = 'places_search_${DateTime.now().millisecondsSinceEpoch}';
-    
-    // Create the HTML element
-    final searchDiv = html.DivElement()
-      ..id = searchId
-      ..style.width = '400px'
-      ..style.height = '50px';
-    
-    final searchInput = html.InputElement()
-      ..id = '${searchId}_input'
-      ..style.width = '100%'
-      ..style.height = '40px'
-      ..style.padding = '8px'
-      ..style.fontSize = '16px'
-      ..style.borderRadius = '4px'
-      ..style.border = '1px solid #ccc'
-      ..placeholder = 'Search for a location...';
-    
-    searchDiv.append(searchInput);
-    
-    html.document.body!.append(searchDiv);
-    
-    // Initialize Google Places Autocomplete
-    js.context.callMethod('eval', ['''
-      (function() {
-        function initAutocomplete() {
-          const input = document.getElementById('${searchId}_input');
-          const autocomplete = new google.maps.places.Autocomplete(input);
-          autocomplete.addListener('place_changed', function() {
-            const place = autocomplete.getPlace();
-            if (place.formatted_address) {
-              window.selectPlace(place.formatted_address);
-              // Close dialog
-              document.getElementById('${searchId}').remove();
-            }
-          });
-        }
-        
-        if (typeof google !== 'undefined' && google.maps && google.maps.places) {
-          initAutocomplete();
-          // Focus the input
-          setTimeout(() => document.getElementById('${searchId}_input').focus(), 100);
-        } else {
-          console.error('Google Places API not loaded yet');
-        }
-      })();
-    ''']);
-    
-    // Show dialog
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Search Location'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Please use the search box that appeared on the page to find a location.'),
-              const SizedBox(height: 16),
-              if (_locationController.text.isNotEmpty)
-                Text('Current: ${_locationController.text}'),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                // Remove the HTML element when closing dialog
-                html.document.getElementById(searchId)?.remove();
-                Navigator.of(context).pop();
-              },
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                if (_locationController.text.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please select a location')),
-                  );
-                  return;
-                }
-                // Remove the HTML element when closing dialog
-                html.document.getElementById(searchId)?.remove();
-                Navigator.of(context).pop();
-              },
-              child: const Text('Confirm'),
-            ),
-          ],
-        );
-      },
-    ).then((_) {
-      // Ensure element is removed if dialog is dismissed
-      html.document.getElementById(searchId)?.remove();
-    });
-  }
-
   Future<void> _saveEvent() async {
     if (!_formKey.currentState!.validate()) return;
 
     final location = _locationController.text.trim();
-
     if (location.isEmpty) {
       setState(() => _locationError = 'Please enter a location');
       return;
@@ -273,6 +291,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
     }
 
     setState(() => _isLoading = true);
+
     try {
       await FirebaseFirestore.instance.collection('events').add({
         'title': _titleController.text.trim(),
@@ -290,18 +309,25 @@ class _CreateEventPageState extends State<CreateEventPage> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Event created successfully!')),
+        const SnackBar(content: Text('🎉 Event created successfully!')),
       );
 
       _formKey.currentState?.reset();
       setState(() {
         _selectedCategory = null;
         _selectedDate = null;
-        _locationController.text = '';
+        _locationController.clear();
         _uploadedImageUrls.clear();
         _imageBytesList.clear();
         _locationError = null;
       });
+
+      await Future.delayed(const Duration(milliseconds: 1500));
+      if (mounted) {
+      Navigator.of(context).pushReplacement(  
+        MaterialPageRoute(builder: (context) => const MainNav()), // << and this!
+      );
+    }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -312,135 +338,126 @@ class _CreateEventPageState extends State<CreateEventPage> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    debugPrint('>> Selected category: $_selectedCategory');
-debugPrint('>> Available categories: $_categories');
-debugPrint('>> Matching: ${_categories.where((e) => e == _selectedCategory).toList()}');
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Create New Event'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.save),
-            onPressed: _isLoading ? null : _saveEvent,
-          ),
-        ],
+  void _showPlacesSearchDialog() {
+    final dialogKey = 'places_dialog_${DateTime.now().millisecondsSinceEpoch}';
+    final inputId = 'autocomplete_input_${DateTime.now().millisecondsSinceEpoch}';
+
+    final overlayDiv = html.DivElement()
+      ..id = dialogKey
+      ..style.position = 'fixed'
+      ..style.top = '0'
+      ..style.left = '0'
+      ..style.width = '100%'
+      ..style.height = '100%'
+      ..style.backgroundColor = 'rgba(0, 0, 0, 0.5)'
+      ..style.display = 'flex'
+      ..style.alignItems = 'center'
+      ..style.justifyContent = 'center'
+      ..style.zIndex = '10000';
+
+    final cardDiv = html.DivElement()
+      ..style.width = '90%'
+      ..style.maxWidth = '400px'
+      ..style.backgroundColor = '#fff'
+      ..style.borderRadius = '12px'
+      ..style.padding = '20px'
+      ..style.boxShadow = '0 4px 16px rgba(0,0,0,0.2)'
+      ..style.display = 'flex'
+      ..style.flexDirection = 'column';
+
+    final title = html.HeadingElement.h3()
+      ..text = 'Search for Location'
+      ..style.marginBottom = '12px'
+      ..style.fontFamily = 'sans-serif';
+
+    final input = html.InputElement()
+      ..id = inputId
+      ..placeholder = 'Start typing...'
+      ..style.padding = '10px'
+      ..style.fontSize = '16px'
+      ..style.borderRadius = '6px'
+      ..style.border = '1px solid #ccc';
+
+    final buttonRow = html.DivElement()
+      ..style.marginTop = '16px'
+      ..style.display = 'flex'
+      ..style.justifyContent = 'flex-end';
+
+    final cancelBtn = html.ButtonElement()
+      ..text = 'Cancel'
+      ..style.marginRight = '10px'
+      ..onClick.listen((_) => overlayDiv.remove());
+
+    final confirmBtn = html.ButtonElement()
+      ..text = 'Confirm'
+      ..onClick.listen((_) {
+        if (input.value != null && input.value!.trim().isNotEmpty) {
+          setState(() {
+            _locationController.text = input.value!.trim();
+            _locationError = null;
+          });
+          overlayDiv.remove();
+        }
+      });
+
+    buttonRow.append(cancelBtn);
+    buttonRow.append(confirmBtn);
+
+    cardDiv.append(title);
+    cardDiv.append(input);
+    cardDiv.append(buttonRow);
+    overlayDiv.append(cardDiv);
+    html.document.body!.append(overlayDiv);
+
+    js.context.callMethod('eval', [
+      '''
+      setTimeout(() => {
+        const input = document.getElementById('$inputId');
+        const autocomplete = new google.maps.places.Autocomplete(input);
+
+        const observer = new MutationObserver((mutations) => {
+          document.querySelectorAll('.pac-container').forEach(el => {
+            el.style.zIndex = '10001';
+          });
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+
+        autocomplete.addListener('place_changed', () => {
+          const place = autocomplete.getPlace();
+          if (place.formatted_address) {
+            window.selectPlace(place.formatted_address);
+            document.getElementById('$dialogKey')?.remove();
+            observer.disconnect();
+          }
+        });
+
+        input.focus();
+      }, 100);
+      '''
+    ]);
+  }
+
+  InputDecoration _buildInputDecoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: GoogleFonts.poppins(color: Colors.grey[800]),
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.deepPurple),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    TextFormField(
-                      controller: _titleController,
-                      decoration: const InputDecoration(
-                        labelText: 'Event Title',
-                        border: OutlineInputBorder(),
-                      ),
-                      validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _descController,
-                      decoration: const InputDecoration(
-                        labelText: 'Description',
-                        border: OutlineInputBorder(),
-                      ),
-                      maxLines: 3,
-                      validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    DropdownButtonFormField<String>(
-  value: _categories.contains(_selectedCategory) ? _selectedCategory : null,
-  decoration: const InputDecoration(
-    labelText: 'Category',
-    border: OutlineInputBorder(),
-  ),
-  items: _categories.toSet().map((e) => DropdownMenuItem(
-    value: e,
-    child: Text(e),
-  )).toList(),
-  onChanged: (value) {
-    setState(() {
-      _selectedCategory = value;
-    });
-  },
-  validator: (value) =>
-      value == null ? 'Please select a category' : null,
-),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _locationController,
-                      decoration: InputDecoration(
-                        labelText: 'Location',
-                        errorText: _locationError,
-                        border: const OutlineInputBorder(),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.search),
-                          onPressed: _showPlacesSearchDialog,
-                        ),
-                      ),
-                      readOnly: true,
-                      onTap: _showPlacesSearchDialog,
-                      validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _emailController,
-                      decoration: const InputDecoration(
-                        labelText: 'Contact Email',
-                        border: OutlineInputBorder(),
-                      ),
-                      readOnly: true,
-                    ),
-                    const SizedBox(height: 16),
-                    OutlinedButton(
-                      onPressed: _pickDate,
-                      child: Text(
-                        _selectedDate == null
-                            ? 'Select Date'
-                            : 'Date: ${_selectedDate!.toLocal().toString().split(' ')[0]}',
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    OutlinedButton(
-                      onPressed: _pickAndUploadImages,
-                      child: const Text('Upload Images'),
-                    ),
-                    if (_uploadedImageUrls.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      Text(
-                        'Uploaded Images (${_uploadedImageUrls.length})',
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        height: 100,
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: _uploadedImageUrls.length,
-                          itemBuilder: (context, index) => Padding(
-                            padding: const EdgeInsets.only(right: 8.0),
-                            child: Image.network(_uploadedImageUrls[index]),
-                          ),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 24),
-                    ElevatedButton(
-                      onPressed: _isLoading ? null : _saveEvent,
-                      child: const Text('Create Event'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+    );
+  }
+
+  Widget _buildInputField(TextEditingController controller, String label, {bool readOnly = false, int maxLines = 1}) {
+    return TextFormField(
+      controller: controller,
+      readOnly: readOnly,
+      maxLines: maxLines,
+      decoration: _buildInputDecoration(label),
+      validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
     );
   }
 }

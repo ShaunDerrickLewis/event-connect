@@ -1,239 +1,222 @@
-import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'login.dart';
 
 class ProfilePage extends StatefulWidget {
-  const ProfilePage({super.key});
+  const ProfilePage({Key? key}) : super(key: key);
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  final TextEditingController _ageController = TextEditingController();
-  final TextEditingController _genderController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _aboutController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  final _ageController = TextEditingController();
+  final _genderController = TextEditingController();
+  final _phoneController = TextEditingController();
 
-  String? _email;
-  bool _isLoading = true;
+  User? user = FirebaseAuth.instance.currentUser;
+  bool _isSaving = false;
+  List<Map<String, dynamic>> _interestedEvents = [];
 
   @override
   void initState() {
     super.initState();
-    _fetchUserInfo();
+    _loadUserProfile();
+    _loadInterestedEvents();
   }
 
-  Future<void> _fetchUserInfo() async {
-    final user = FirebaseAuth.instance.currentUser;
+  Future<void> _loadUserProfile() async {
     if (user == null) return;
-
-    _email = user.email;
-
-    final doc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .get();
-
-    if (doc.exists) {
-      final data = doc.data()!;
-      _ageController.text = data['age'] ?? '';
+    final doc = await FirebaseFirestore.instance.collection('users').doc(user!.uid).get();
+    final data = doc.data();
+    if (data != null) {
+      _ageController.text = data['age']?.toString() ?? '';
       _genderController.text = data['gender'] ?? '';
       _phoneController.text = data['phone'] ?? '';
-      _aboutController.text = data['about'] ?? '';
     }
-
-    if (mounted) setState(() => _isLoading = false);
   }
 
-  Future<void> _saveField(String key, String value) async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
+  Future<void> _loadInterestedEvents() async {
+    if (user == null) return;
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user!.uid).get();
+    final interestedIds = List<String>.from(userDoc.data()?['interestedEvents'] ?? []);
 
-    await FirebaseFirestore.instance.collection('users').doc(uid).set(
-      {key: value},
-      SetOptions(merge: true),
-    );
+    if (interestedIds.isNotEmpty) {
+      final eventSnapshots = await FirebaseFirestore.instance
+          .collection('events')
+          .where(FieldPath.documentId, whereIn: interestedIds)
+          .get();
+
+      setState(() {
+        _interestedEvents = eventSnapshots.docs.map((e) => e.data() as Map<String, dynamic>).toList();
+      });
+    }
   }
 
-  Widget _editableField(String label, TextEditingController controller, String key) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: TextFormField(
-              controller: controller,
-              decoration: InputDecoration(
-                labelText: label,
-                border: const OutlineInputBorder(),
+  Future<void> _saveProfile() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isSaving = true);
+
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(user!.uid).set({
+        'email': user!.email,
+        'age': _ageController.text.trim(),
+        'gender': _genderController.text.trim(),
+        'phone': _phoneController.text.trim(),
+      }, SetOptions(merge: true));
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Profile updated!'),
+          backgroundColor: Colors.deepPurple,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.redAccent),
+      );
+    } finally {
+      setState(() => _isSaving = false);
+    }
+  }
+
+  void _logout() async {
+    await FirebaseAuth.instance.signOut();
+    if (mounted) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const LoginPage()), 
+        (route) => false,
+      );
+    }
+  }
+
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8F4FF),
+      appBar: AppBar(
+        title: const Text('Profile', style: TextStyle(color: Colors.black)),
+        backgroundColor: const Color(0xFFF8F4FF),
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.black),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Card(
+              elevation: 6,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      const CircleAvatar(
+                        radius: 40,
+                        backgroundColor: Colors.deepPurple,
+                        child: Icon(Icons.person, size: 40, color: Colors.white),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(user?.email ?? '', style: const TextStyle(fontSize: 16)),
+                      const SizedBox(height: 20),
+                      _buildTextField(_ageController, "Age", TextInputType.number),
+                      const SizedBox(height: 12),
+                      _buildTextField(_genderController, "Gender"),
+                      const SizedBox(height: 12),
+                      _buildTextField(_phoneController, "Phone", TextInputType.phone),
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _isSaving ? null : _saveProfile,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.deepPurple,
+                            foregroundColor: Colors.white,
+                            disabledBackgroundColor: Colors.deepPurple.shade200,
+                            disabledForegroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: const Text(
+                            'Save Changes',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              onFieldSubmitted: (val) => _saveField(key, val),
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.save),
-            onPressed: () => _saveField(key, controller.text.trim()),
-          ),
-        ],
+            const SizedBox(height: 30),
+            const Text('Interested Events', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            _interestedEvents.isEmpty
+                ? const Text("You haven't marked interest in any event yet.", style: TextStyle(fontSize: 14))
+                : ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _interestedEvents.length,
+                    itemBuilder: (context, index) {
+                      final event = _interestedEvents[index];
+                      return Card(
+                        margin: const EdgeInsets.symmetric(vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        elevation: 3,
+                        child: ListTile(
+                          leading: const Icon(Icons.event, color: Colors.deepPurple),
+                          title: Text(event['title'] ?? 'No Title', style: const TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: Text(event['date'] != null ? event['date'].toString().split('T').first : 'No Date'),
+                        ),
+                      );
+                    },
+                  ),
+            const SizedBox(height: 20),
+            Center(
+              child: ElevatedButton(
+                onPressed: _logout,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.redAccent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text('Logout', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  @override
-  void dispose() {
-    _ageController.dispose();
-    _genderController.dispose();
-    _phoneController.dispose();
-    _aboutController.dispose();
-    super.dispose();
+  Widget _buildTextField(
+    TextEditingController controller,
+    String label, [
+    TextInputType keyboardType = TextInputType.text,
+  ]) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      decoration: InputDecoration(
+        labelText: label,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      validator: (value) {
+        if (value == null || value.trim().isEmpty) {
+          return 'Required';
+        }
+        return null;
+      },
+    );
   }
-
- @override
-Widget build(BuildContext context) {
-  return Scaffold(
-    appBar: AppBar(
-      title: const Text("Profile"),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.logout),
-          onPressed: () async {
-            await FirebaseAuth.instance.signOut();
-            if (context.mounted) {
-              Navigator.of(context).pushReplacementNamed('/login');
-            }
-          },
-        ),
-      ],
-    ),
-    body: _isLoading
-        ? const Center(child: CircularProgressIndicator())
-        : SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Card(
-                  elevation: 6,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        const CircleAvatar(
-                          radius: 50,
-                          backgroundImage: AssetImage('assets/profile_placeholder.png'),
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            const Icon(Icons.email),
-                            const SizedBox(width: 8),
-                            Expanded(child: Text(_email ?? '', style: const TextStyle(fontSize: 16))),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        _editableField("Age", _ageController, 'age'),
-                        _editableField("Gender", _genderController, 'gender'),
-                        _editableField("Phone", _phoneController, 'phone'),
-                        _editableField("About", _aboutController, 'about'),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                const Text("Interested Events", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                _buildInterestedEvents(),
-                const SizedBox(height: 24),
-ElevatedButton.icon(
-  icon: const Icon(Icons.logout, color: Colors.white),
-  label: const Text("Logout", style: TextStyle(color: Colors.white)),
-  style: ElevatedButton.styleFrom(
-    backgroundColor: Colors.red,
-    padding: const EdgeInsets.symmetric(vertical: 14),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-  ),
-  onPressed: () async {
-    await FirebaseAuth.instance.signOut();
-    if (context.mounted) {
-      Navigator.of(context).pushReplacementNamed('/');
-    }
-  },
-),
-              ],
-            ),
-          ),
-  );
-}
-
-
-Widget _buildInterestedEvents() {
-  final uid = FirebaseAuth.instance.currentUser?.uid;
-  if (uid == null) return const Text("Not logged in");
-  
-
-  return StreamBuilder<QuerySnapshot>(
-    stream: FirebaseFirestore.instance
-        .collection('events')
-        .where('interestedUserIds', arrayContains: uid)
-        .snapshots(),
-    builder: (context, snapshot) {
-      if (!snapshot.hasData) return const CircularProgressIndicator();
-
-      final docs = snapshot.data!.docs;
-      if (docs.isEmpty) {
-        return const Text("You haven't marked interest in any event yet.");
-      }
-
-      return ListView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: docs.length,
-        itemBuilder: (context, index) {
-          final data = docs[index].data() as Map<String, dynamic>;
-          final docId = docs[index].id;
-          final images = (data['imageUrls'] as List?)?.cast<String>() ?? [];
-
-          return Card(
-            elevation: 4,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            margin: const EdgeInsets.symmetric(vertical: 8),
-            child: ExpansionTile(
-              title: Text(data['title'] ?? 'Untitled'),
-              subtitle: Text(data['location'] ?? 'No location'),
-              leading: images.isNotEmpty
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: Image.network(images[0], width: 50, height: 50, fit: BoxFit.cover),
-                    )
-                  : const Icon(Icons.image, size: 40),
-              children: [
-                ListTile(title: Text("Date: ${data['date'] ?? 'N/A'}")),
-                ListTile(title: Text("Category: ${data['category'] ?? 'N/A'}")),
-                ListTile(title: Text("Description: ${data['description'] ?? 'N/A'}")),
-                TextButton.icon(
-                  icon: const Icon(Icons.cancel),
-                  label: const Text("Not Interested"),
-                  onPressed: () async {
-                    await FirebaseFirestore.instance.collection('events').doc(docId).update({
-                      'interestedUserIds': FieldValue.arrayRemove([uid]),
-                      'interestedUserEmails': FieldValue.arrayRemove([FirebaseAuth.instance.currentUser?.email]),
-                    });
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Removed from interested')),
-                    );
-                  },
-                ),
-              ],
-            ),
-          );
-        },
-      );
-    },
-  );
-}
-
-
 }
