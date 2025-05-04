@@ -295,9 +295,17 @@ class _EventDetailsDialogState extends State<EventDetailsDialog> with SingleTick
   int _currentPage = 0;
   Timer? _timer;
 
+  late String userId;
+  List<dynamic> interestedUserIds = [];
+  bool isInterested = false;
+
   @override
   void initState() {
     super.initState();
+    userId = FirebaseAuth.instance.currentUser?.uid ?? '';
+    interestedUserIds = widget.data['interestedUserIds'] ?? [];
+    isInterested = interestedUserIds.contains(userId);
+
     _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
     _animation = CurvedAnimation(parent: _controller, curve: Curves.easeIn);
     _controller.forward();
@@ -315,6 +323,46 @@ class _EventDetailsDialogState extends State<EventDetailsDialog> with SingleTick
       });
     }
   }
+
+ Future<void> _toggleInterest() async {
+  if (userId.isEmpty) return;
+
+  try {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final docRef = FirebaseFirestore.instance.collection('events').doc(widget.docId);
+
+      await docRef.update({
+        'interestedUserIds': isInterested
+            ? FieldValue.arrayRemove([user.uid])
+            : FieldValue.arrayUnion([user.uid]),
+        'interestedUserEmails': isInterested
+            ? FieldValue.arrayRemove([user.email])
+            : FieldValue.arrayUnion([user.email]),
+      });
+
+      setState(() {
+        isInterested = !isInterested;
+        if (isInterested) {
+          interestedUserIds.add(userId);
+        } else {
+          interestedUserIds.remove(userId);
+        }
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isInterested ? 'Marked as Interested' : 'Removed from Interested'),
+        ),
+      );
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Error: $e')),
+    );
+  }
+}
+
 
   @override
   void dispose() {
@@ -401,6 +449,18 @@ class _EventDetailsDialogState extends State<EventDetailsDialog> with SingleTick
                       style: GoogleFonts.poppins(fontSize: 14)),
                 ),
                 const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: _toggleInterest,
+                  icon: Icon(isInterested ? Icons.favorite : Icons.favorite_border),
+                  label: Text(isInterested ? 'Interested ✔' : 'Mark as Interested'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isInterested ? Colors.grey : Colors.deepPurple,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 ElevatedButton(
                   onPressed: () => Navigator.of(context).pop(),
                   style: ElevatedButton.styleFrom(

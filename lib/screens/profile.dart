@@ -39,21 +39,22 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _loadInterestedEvents() async {
-    if (user == null) return;
-    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user!.uid).get();
-    final interestedIds = List<String>.from(userDoc.data()?['interestedEvents'] ?? []);
+  if (user == null) return;
 
-    if (interestedIds.isNotEmpty) {
-      final eventSnapshots = await FirebaseFirestore.instance
-          .collection('events')
-          .where(FieldPath.documentId, whereIn: interestedIds)
-          .get();
+  final eventSnapshots = await FirebaseFirestore.instance
+      .collection('events')
+      .where('interestedUserIds', arrayContains: user!.uid)
+      .get();
 
-      setState(() {
-        _interestedEvents = eventSnapshots.docs.map((e) => e.data() as Map<String, dynamic>).toList();
-      });
-    }
-  }
+  setState(() {
+    _interestedEvents = eventSnapshots.docs.map((e) {
+      final data = e.data();
+      data['id'] = e.id; // Optional: if you want to use the doc ID later
+      return data;
+    }).toList();
+  });
+}
+
 
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
@@ -130,7 +131,28 @@ class _ProfilePageState extends State<ProfilePage> {
                       const SizedBox(height: 20),
                       _buildTextField(_ageController, "Age", TextInputType.number),
                       const SizedBox(height: 12),
-                      _buildTextField(_genderController, "Gender"),
+                      DropdownButtonFormField<String>(
+                      value: ['Male', 'Female'].contains(_genderController.text) ? _genderController.text : null,
+
+                      items: ['Male', 'Female'].map((gender) {
+                        return DropdownMenuItem(
+                          value: gender,
+                          child: Text(gender),
+                        );
+                      }).toList(),
+                      decoration: InputDecoration(
+                        labelText: 'Gender',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onChanged: (value) => setState(() => _genderController.text = value ?? ''),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please select a gender';
+                        }
+                        return null;
+                      },
+                    ),
+
                       const SizedBox(height: 12),
                       _buildTextField(_phoneController, "Phone", TextInputType.phone),
                       const SizedBox(height: 20),
