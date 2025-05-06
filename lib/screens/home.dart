@@ -235,10 +235,22 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                   child: SizedBox(
                                     height: 180,
                                     child: firstImage != null
-                                        ? Image.network(firstImage, fit: BoxFit.cover, width: double.infinity)
-                                        : Container(
-                                            color: Colors.grey[300],
-                                            child: const Center(child: Icon(Icons.image_not_supported, size: 40)),
+                                        ? Image.network(
+                                            firstImage,
+                                            fit: BoxFit.cover,
+                                            width: double.infinity,
+                                            errorBuilder: (context, error, stackTrace) {
+                                              return Image.asset(
+                                                'assets/CatsConnect.jpg',
+                                                fit: BoxFit.contain,
+                                                width: double.infinity,
+                                              );
+                                            },
+                                          )
+                                        : Image.asset(
+                                            'assets/CatsConnect.jpg',
+                                            fit: BoxFit.contain,
+                                            width: double.infinity,
                                           ),
                                   ),
                                 ),
@@ -409,7 +421,18 @@ class _EventDetailsDialogState extends State<EventDetailsDialog> with SingleTick
                           onPageChanged: (index) => setState(() => _currentPage = index),
                           itemBuilder: (context, index) => ClipRRect(
                             borderRadius: BorderRadius.circular(12),
-                            child: Image.network(imageUrls[index], fit: BoxFit.cover, width: double.infinity),
+                            child: Image.network(
+                            imageUrls[index],
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Image.asset(
+                                'assets/CatsConnect.jpg',
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                              );
+                            },
+                          ),
                           ),
                         ),
                       ),

@@ -66,6 +66,7 @@ flutter:
   assets:
     - assets/profile_placeholder.png
     - assets/chico_wildcat_welcome.png
+    - assets/CatsConnect.jpg
   
 
   # To add assets to your application, add an assets section, like this:

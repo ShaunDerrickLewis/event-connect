@@ -425,7 +425,7 @@ class _EventDetailDialogState extends State<EventDetailDialog> {
                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                      ),
-                     child: const Text("Interested", style: TextStyle(fontSize: 14)),
+                     child: const Text("View Interested Users", style: TextStyle(fontSize: 14)),
                    ),
                    ElevatedButton(
                      onPressed: () {
@@ -792,38 +792,61 @@ class _EditEventPageState extends State<EditEventPage> {
   }
 
 
+Widget _buildImagePreview() {
+  if (_imageUrls.isEmpty) {
+    return const SizedBox.shrink();
+  }
 
-  Widget _buildImagePreview() {
-    if (_imageUrls.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return SizedBox(
-      height: 100,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: _imageUrls.length,
-        itemBuilder: (_, i) => Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Image.network(
-              _imageUrls[i],
-              width: 100,
-              height: 100,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  width: 100,
-                  height: 100,
-                  color: Colors.deepPurple.shade50,
-                  child: const Icon(Icons.broken_image, size: 30, color: Colors.deepPurple),
-                );
-              },
+  return SizedBox(
+    height: 100,
+    child: ListView.builder(
+      scrollDirection: Axis.horizontal,
+      itemCount: _imageUrls.length,
+      itemBuilder: (_, i) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        child: Stack(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.network(
+                _imageUrls[i],
+                width: 100,
+                height: 100,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    width: 100,
+                    height: 100,
+                    color: Colors.deepPurple.shade50,
+                    child: const Icon(Icons.broken_image, size: 30, color: Colors.deepPurple),
+                  );
+                },
+              ),
             ),
-          ),
+            Positioned(
+              top: 4,
+              right: 4,
+              child: GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _imageUrls.removeAt(i);
+                  });
+                },
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    shape: BoxShape.circle,
+                  ),
+                  padding: const EdgeInsets.all(4),
+                  child: const Icon(Icons.close, color: Colors.white, size: 16),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
+
 }
