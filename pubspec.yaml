@@ -40,6 +40,7 @@ dependencies:
   google_maps_webservice: ^0.0.20-nullsafety.5
   flutter_typeahead: ^5.2.0
   intl: ^0.18.1
+  google_fonts: ^4.0.4
 
 
 dev_dependencies:
@@ -65,6 +66,7 @@ flutter:
   assets:
     - assets/profile_placeholder.png
     - assets/chico_wildcat_welcome.png
+    - assets/CatsConnect.jpg
   
 
   # To add assets to your application, add an assets section, like this:
